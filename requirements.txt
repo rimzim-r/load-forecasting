@@ -1,0 +1,13 @@
+numpy
+pandas
+matplotlib
+seaborn
+scipy
+statsmodels
+scikit-learn
+lightgbm
+tensorflow
+holidays
+jupyter
+ipykernel
+streamlit
