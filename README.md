@@ -44,6 +44,10 @@ data/        raw and processed data (not tracked)
 
 Data: PJM Interconnection, via Kaggle.
 ## Demo
-```
+
+**Live Streamlit app:**  
+[https://load-forecasting-yxxmlzdcxjrv6fhh82uvdo.streamlit.app/](https://load-forecasting-yxxmlzdcxjrv6fhh82uvdo.streamlit.app/)
+
+To run locally:
+```bash
 streamlit run app/app.py
-```
