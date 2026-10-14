@@ -42,4 +42,8 @@ data/        raw and processed data (not tracked)
 2. Download `PJME_hourly.csv` from the Kaggle dataset "Hourly Energy Consumption" and place it in `data/raw/`.
 3. Run notebooks 01 to 05 in order.
 
-Data: PJM Interconnection, via Kaggle.=
+Data: PJM Interconnection, via Kaggle.
+## Demo
+```
+streamlit run app/app.py
+```
