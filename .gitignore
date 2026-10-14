@@ -7,3 +7,4 @@ models/*.h5
 models/*.keras
 .DS_Store
 .env
+archive/

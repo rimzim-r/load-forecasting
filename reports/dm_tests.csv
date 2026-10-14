@@ -1,0 +1,6 @@
+A,B,mean daily MAE A - B (MW),p-value
+naive_24,lightgbm_v2,1019.8,0.0
+lightgbm,lightgbm_v2,505.6,0.0
+lightgbm_v2,lstm,-3.8,0.8999
+lightgbm_v2,ensemble,44.1,0.0112
+lstm,ensemble,47.8,0.0006
