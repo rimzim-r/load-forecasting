@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+data/raw/
+data/processed/
+models/*.h5
+models/*.keras
+.DS_Store
+.env
+archive/
+models/*.txt
