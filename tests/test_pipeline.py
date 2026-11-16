@@ -32,9 +32,7 @@ def test_clean_load_series_deduplicates_and_interpolates():
 
 def test_find_iqr_outliers():
     idx = pd.date_range("2018-01-01", periods=100, freq="h")
-    vals = np.full(100, 30000.0)
-    vals[10] = 29000.0
-    vals[20] = 31000.0
+    vals = np.linspace(28000.0, 32000.0, 100)
     vals[50] = 65000.0
     df = pd.DataFrame({"load_mw": vals}, index=idx)
     outliers = find_iqr_outliers(df, multiplier=3.0)
@@ -75,11 +73,19 @@ def test_metrics():
 
 
 class TestPipeline(unittest.TestCase):
-    def test_all(self):
+    def test_clean_load_series(self):
         test_clean_load_series_deduplicates_and_interpolates()
+
+    def test_iqr_outliers(self):
         test_find_iqr_outliers()
+
+    def test_features_no_leakage(self):
         test_make_and_anchored_features_no_leakage()
+
+    def test_lstm_windows(self):
         test_day_features_and_lstm_windows()
+
+    def test_evaluation_metrics(self):
         test_metrics()
 
 
