@@ -30,6 +30,11 @@ def set_seeds(seed: int = 42) -> None:
     tf.random.set_seed(seed)
 
 
+def fit_scaler(series: pd.Series, train_end: str = TRAIN_END) -> StandardScaler:
+    """Fit StandardScaler strictly on the training period to prevent leakage."""
+    return StandardScaler().fit(series[:train_end].values.reshape(-1, 1))
+
+
 def build_lstm_model(n_calendar_features: int = 10, lookback: int = LOOKBACK, horizon: int = HORIZON) -> keras.Model:
     """Build functional Keras LSTM taking 168h load history and 10 calendar features."""
     seq_in = keras.Input(shape=(lookback, 1), name="history")
@@ -48,17 +53,19 @@ def build_lstm_model(n_calendar_features: int = 10, lookback: int = LOOKBACK, ho
     return model
 
 
-def main(clean_path: Path = CLEAN_PATH, epochs: int = 80) -> pd.Series:
+def train_lstm(
+    series: pd.Series,
+    models_dir: Path = MODELS_DIR,
+    fig_dir: Path = FIG_DIR,
+    epochs: int = 80,
+) -> keras.Model:
+    """Train the sequence-to-24h LSTM model, save weights, and plot training curve."""
     set_seeds(42)
-    df = pd.read_csv(clean_path, index_col="Datetime", parse_dates=True)
-    y = df["load_mw"].asfreq("h")
-
-    scaler = StandardScaler().fit(y[:TRAIN_END].values.reshape(-1, 1))
-    y_s = pd.Series(scaler.transform(y.values.reshape(-1, 1)).ravel(), index=y.index)
+    scaler = fit_scaler(series)
+    y_s = pd.Series(scaler.transform(series.values.reshape(-1, 1)).ravel(), index=series.index)
 
     Xs_tr, Xd_tr, Y_tr, _ = build_lstm_windows(y_s, "2002-01-01", "2016-12-31")
     Xs_va, Xd_va, Y_va, _ = build_lstm_windows(y_s, "2017-01-01", "2017-12-31")
-    Xs_te, Xd_te, _, d_te = build_lstm_windows(y_s, "2018-01-01", "2018-08-03")
 
     model = build_lstm_model(n_calendar_features=Xd_tr.shape[1])
     callbacks = [
@@ -66,7 +73,8 @@ def main(clean_path: Path = CLEAN_PATH, epochs: int = 80) -> pd.Series:
         keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=4, min_lr=1e-5),
     ]
     history = model.fit(
-        [Xs_tr, Xd_tr], Y_tr,
+        [Xs_tr, Xd_tr],
+        Y_tr,
         validation_data=([Xs_va, Xd_va], Y_va),
         epochs=epochs,
         batch_size=64,
@@ -75,20 +83,9 @@ def main(clean_path: Path = CLEAN_PATH, epochs: int = 80) -> pd.Series:
         verbose=2,
     )
 
-    pred_s = model.predict([Xs_te, Xd_te], verbose=0)
-    pred_mw = scaler.inverse_transform(pred_s.reshape(-1, 1)).reshape(-1, HORIZON)
-    idx = pd.DatetimeIndex([d + pd.Timedelta(hours=h) for d in d_te for h in range(HORIZON)])
-    lstm_pred = pd.Series(pred_mw.ravel(), index=idx, name="lstm")
-
-    actual_te = y.loc[lstm_pred.index]
-    print("LSTM test metrics:", {k: round(v, 2) for k, v in metrics(actual_te, lstm_pred).items()})
-
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    FIG_DIR.mkdir(parents=True, exist_ok=True)
-
-    lstm_pred.to_csv(PROCESSED_DIR / "lstm_predictions.csv")
-    model.save(MODELS_DIR / "lstm.keras")
+    models_dir.mkdir(parents=True, exist_ok=True)
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    model.save(models_dir / "lstm.keras")
 
     sns.set_theme(style="whitegrid")
     fig, ax = plt.subplots(figsize=(10, 4))
@@ -98,9 +95,46 @@ def main(clean_path: Path = CLEAN_PATH, epochs: int = 80) -> pd.Series:
     ax.set_xlabel("Epoch")
     ax.legend()
     plt.tight_layout()
-    plt.savefig(FIG_DIR / "07_lstm_training.png", dpi=150)
+    plt.savefig(fig_dir / "07_lstm_training.png", dpi=150)
     plt.close(fig)
 
+    return model
+
+
+def predict_lstm(
+    series: pd.Series,
+    model_or_path: keras.Model | Path = MODELS_DIR / "lstm.keras",
+    start_day: str = "2018-01-01",
+    end_day: str = "2018-08-03",
+) -> pd.Series:
+    """Run day-ahead 24-hour LSTM inference over [start_day, end_day] and inverse-scale to MW."""
+    scaler = fit_scaler(series)
+    y_s = pd.Series(scaler.transform(series.values.reshape(-1, 1)).ravel(), index=series.index)
+    Xs_te, Xd_te, _, d_te = build_lstm_windows(y_s, start_day, end_day)
+
+    model = (
+        keras.models.load_model(model_or_path)
+        if isinstance(model_or_path, (str, Path))
+        else model_or_path
+    )
+    pred_s = model.predict([Xs_te, Xd_te], verbose=0)
+    pred_mw = scaler.inverse_transform(pred_s.reshape(-1, 1)).reshape(-1, HORIZON)
+    idx = pd.DatetimeIndex([d + pd.Timedelta(hours=h) for d in d_te for h in range(HORIZON)])
+    return pd.Series(pred_mw.ravel(), index=idx, name="lstm")
+
+
+def main(clean_path: Path = CLEAN_PATH, epochs: int = 80) -> pd.Series:
+    df = pd.read_csv(clean_path, index_col="Datetime", parse_dates=True)
+    y = df["load_mw"].asfreq("h")
+
+    model = train_lstm(y, MODELS_DIR, FIG_DIR, epochs=epochs)
+    lstm_pred = predict_lstm(y, model, start_day="2018-01-01", end_day="2018-08-03")
+
+    actual_te = y.loc[lstm_pred.index]
+    print("LSTM test metrics:", {k: round(v, 2) for k, v in metrics(actual_te, lstm_pred).items()})
+
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    lstm_pred.to_csv(PROCESSED_DIR / "lstm_predictions.csv")
     return lstm_pred
 
 

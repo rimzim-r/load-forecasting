@@ -1,8 +1,16 @@
+import unittest
+
 import numpy as np
 import pandas as pd
 
-from src.data import clean_load_series
-from src.features import add_anchored_features, day_features, make_features, metrics
+from src.data import clean_load_series, find_iqr_outliers
+from src.features import (
+    add_anchored_features,
+    build_lstm_windows,
+    day_features,
+    make_features,
+    metrics,
+)
 
 
 def test_clean_load_series_deduplicates_and_interpolates():
@@ -22,6 +30,18 @@ def test_clean_load_series_deduplicates_and_interpolates():
     assert cleaned["load_mw"].isna().sum() == 0
 
 
+def test_find_iqr_outliers():
+    idx = pd.date_range("2018-01-01", periods=100, freq="h")
+    vals = np.full(100, 30000.0)
+    vals[10] = 29000.0
+    vals[20] = 31000.0
+    vals[50] = 65000.0
+    df = pd.DataFrame({"load_mw": vals}, index=idx)
+    outliers = find_iqr_outliers(df, multiplier=3.0)
+    assert len(outliers) == 1
+    assert outliers.index[0] == idx[50]
+
+
 def test_make_and_anchored_features_no_leakage():
     idx = pd.date_range("2017-01-01", periods=24 * 20, freq="h")
     s = pd.Series(np.linspace(25000.0, 35000.0, len(idx)), index=idx)
@@ -32,10 +52,18 @@ def test_make_and_anchored_features_no_leakage():
     assert not feat2.isna().any().any()
 
 
-def test_day_features_shape():
+def test_day_features_and_lstm_windows():
     vec = day_features(pd.Timestamp("2018-01-01"))
     assert vec.shape == (10,)
     assert vec[7] == 1.0  # New Year's Day is a US holiday
+
+    idx = pd.date_range("2018-01-01", periods=24 * 10, freq="h")
+    s = pd.Series(np.sin(np.arange(len(idx))), index=idx)
+    xs, xd, y_out, days = build_lstm_windows(s, "2018-01-08", "2018-01-09")
+    assert xs.shape == (2, 168, 1)
+    assert xd.shape == (2, 10)
+    assert y_out.shape == (2, 24)
+    assert len(days) == 2
 
 
 def test_metrics():
@@ -44,3 +72,16 @@ def test_metrics():
     m = metrics(y_true, y_pred)
     assert round(m["MAE"], 2) == 15.0
     assert round(m["MAPE_%"], 2) == 10.0
+
+
+class TestPipeline(unittest.TestCase):
+    def test_all(self):
+        test_clean_load_series_deduplicates_and_interpolates()
+        test_find_iqr_outliers()
+        test_make_and_anchored_features_no_leakage()
+        test_day_features_and_lstm_windows()
+        test_metrics()
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -33,13 +33,20 @@ Test period: 1 Jan to 3 Aug 2018 (5,136 hours). All models forecast the next 24 
 
 ## Project structure
 ```
-src/         modular pipeline (data, features, stats, baselines_ml, lstm_model, compare)
-app/         Streamlit dashboard (app/app.py)
-tests/       unit tests for cleaning, feature engineering and metrics
-notebooks/   exploratory notebooks (01_eda to 05_model_comparison)
-reports/     figures, result tables and demo predictions
-models/      saved models (not tracked)
-data/        raw and processed data (not tracked)
+src/
+  data.py          data loading, DST deduplication, interpolation & EDA plots
+  features.py      time-based splits, lag/rolling/anchored features & LSTM windows
+  stats.py         ADF/KPSS stationarity tests, MSTL decomposition, ACF/PACF & hypothesis tests
+  baselines_ml.py  naive baselines, LightGBM (v1 & midnight-anchored v2), rolling SARIMA
+  lstm_model.py    two-layer sequence-to-24h Keras LSTM training & inference
+  train.py         unified CLI entry point for training LightGBM & LSTM models
+  inference.py     unified CLI entry point for day-ahead batch & 24h inference from saved models
+  compare.py       model comparison, Diebold-Mariano HAC tests & report figures
+app/               Streamlit dashboard (app/app.py)
+tests/             unit tests for cleaning, feature engineering, windowing and metrics
+reports/           figures, result tables and demo predictions
+models/            saved model artifacts
+data/              raw and processed data (not tracked)
 ```
 
 ## Reproduce
@@ -48,10 +55,17 @@ data/        raw and processed data (not tracked)
    pip install -r requirements.txt
    ```
 2. Download `PJME_hourly.csv` from the Kaggle dataset "Hourly Energy Consumption" and place it in `data/raw/`.
-3. Run the modular Python pipeline (or notebooks `01` to `05`):
+3. Run the modular Python pipeline:
    ```bash
+   # Clean data and run statistical analysis
    python -m src.data && python -m src.stats
-   python -m src.baselines_ml && python -m src.lstm_model && python -m src.compare
+
+   # Train models (LightGBM + LSTM) and run inference + evaluation
+   python -m src.train
+   python -m src.inference --run-sarima
+   python -m src.compare
+
+   # Run unit tests
    python -m pytest -q
    ```
 
@@ -59,7 +73,6 @@ Data: PJM Interconnection, via Kaggle.
 
 ## Demo
 **Live Streamlit app:** [https://load-forecasting-yxxmlzdcxjrv6fhh82uvdo.streamlit.app/](https://load-forecasting-yxxmlzdcxjrv6fhh82uvdo.streamlit.app/)
-
 
 To run locally:
 ```bash

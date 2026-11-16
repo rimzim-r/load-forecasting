@@ -1,11 +1,14 @@
-"""Data loading, quality checks, DST deduplication, and hourly interpolation."""
+"""Data loading, quality checks, DST deduplication, hourly interpolation, and EDA plots."""
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sns
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW_PATH = ROOT / "data" / "raw" / "PJME_hourly.csv"
 CLEAN_PATH = ROOT / "data" / "processed" / "pjme_clean.csv"
+FIG_DIR = ROOT / "reports" / "figures"
 
 
 def clean_load_series(df: pd.DataFrame) -> pd.DataFrame:
@@ -34,7 +37,36 @@ def find_iqr_outliers(df: pd.DataFrame, multiplier: float = 3.0) -> pd.DataFrame
     return df[(df["load_mw"] < q1 - multiplier * iqr) | (df["load_mw"] > q3 + multiplier * iqr)]
 
 
-def main(raw_path: Path = RAW_PATH, clean_path: Path = CLEAN_PATH) -> pd.DataFrame:
+def plot_eda_figures(df: pd.DataFrame, fig_dir: Path = FIG_DIR) -> None:
+    """Generate and save overview and seasonality figures (01 and 02)."""
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    sns.set_theme(style="whitegrid")
+
+    fig, ax = plt.subplots(2, 1, figsize=(13, 7))
+    df["load_mw"].plot(ax=ax[0], lw=0.4)
+    ax[0].set_title("PJME hourly load, full history")
+    ax[0].set_ylabel("MW")
+
+    df.loc["2017-01-01":"2017-01-14", "load_mw"].plot(ax=ax[1])
+    ax[1].set_title("Two weeks in detail (daily and weekly pattern)")
+    ax[1].set_ylabel("MW")
+    plt.tight_layout()
+    plt.savefig(fig_dir / "01_load_overview.png", dpi=150)
+    plt.close(fig)
+
+    fig2, ax2 = plt.subplots(1, 3, figsize=(16, 4))
+    sns.lineplot(data=df, x="hour", y="load_mw", hue="is_weekend", ax=ax2[0])
+    ax2[0].set_title("Average load by hour: weekday vs weekend")
+    sns.boxplot(data=df, x="dayofweek", y="load_mw", ax=ax2[1])
+    ax2[1].set_title("Load by day of week (0 = Monday)")
+    sns.boxplot(data=df, x="month", y="load_mw", ax=ax2[2])
+    ax2[2].set_title("Load by month")
+    plt.tight_layout()
+    plt.savefig(fig_dir / "02_seasonality.png", dpi=150)
+    plt.close(fig2)
+
+
+def main(raw_path: Path = RAW_PATH, clean_path: Path = CLEAN_PATH, save_plots: bool = True) -> pd.DataFrame:
     raw = pd.read_csv(raw_path, parse_dates=["Datetime"])
     raw_sorted = raw.sort_values("Datetime").set_index("Datetime")
     full_range = pd.date_range(raw_sorted.index.min(), raw_sorted.index.max(), freq="h")
@@ -51,6 +83,10 @@ def main(raw_path: Path = RAW_PATH, clean_path: Path = CLEAN_PATH) -> pd.DataFra
     clean_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(clean_path)
     print(f"Saved cleaned series to {clean_path}")
+
+    if save_plots:
+        plot_eda_figures(df)
+
     return df
 
 
