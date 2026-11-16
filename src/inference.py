@@ -12,15 +12,18 @@ from src.features import TEST_START, metrics
 def run_inference(
     series: pd.Series,
     models_dir: Path = MODELS_DIR,
+    processed_dir: Path = PROCESSED_DIR,
     start_day: str = TEST_START,
     end_day: str = "2018-08-03",
     include_lstm: bool = True,
 ) -> pd.DataFrame:
-    """Run batch day-ahead inference using saved LightGBM boosters and optional Keras LSTM model."""
+    """Run batch day-ahead inference using saved LightGBM boosters and Keras LSTM model (or cached LSTM preds)."""
     end_ts = str(pd.Timestamp(end_day) + pd.Timedelta(hours=23))
     preds = predict_baselines_and_lgb(series, models_dir=models_dir, start=start_day, end=end_ts)
 
     lstm_path = models_dir / "lstm.keras"
+    cached_lstm_path = processed_dir / "lstm_predictions.csv"
+
     if include_lstm and lstm_path.exists():
         from src.lstm_model import predict_lstm
 
@@ -28,6 +31,13 @@ def run_inference(
         preds = preds.loc[lstm_pred.index].copy()
         preds["lstm"] = lstm_pred
         preds["ensemble"] = (preds["lightgbm_v2"] + preds["lstm"]) / 2
+    elif include_lstm and cached_lstm_path.exists():
+        lstm_pred = pd.read_csv(cached_lstm_path, index_col=0, parse_dates=True).iloc[:, 0]
+        common_idx = preds.index.intersection(lstm_pred.index)
+        if len(common_idx) > 0:
+            preds = preds.loc[common_idx].copy()
+            preds["lstm"] = lstm_pred.loc[common_idx]
+            preds["ensemble"] = (preds["lightgbm_v2"] + preds["lstm"]) / 2
 
     return preds
 
@@ -66,6 +76,7 @@ def main() -> pd.DataFrame:
     preds = run_inference(
         y,
         models_dir=args.models_dir,
+        processed_dir=args.output.parent,
         start_day=args.start_day,
         end_day=args.end_day,
     )

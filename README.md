@@ -65,8 +65,8 @@ data/              raw and processed data (not tracked)
    python -m src.inference --run-sarima
    python -m src.compare
 
-   # Run unit tests
-   python -m pytest -q
+   # Run unit tests (works with standard library unittest or pytest)
+   python -m unittest discover -s tests -v
    ```
 
 Data: PJM Interconnection, via Kaggle.
