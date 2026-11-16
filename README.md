@@ -2,6 +2,8 @@
 
 Forecasting hourly electricity demand for the next day using statistical analysis, gradient boosting and an LSTM, evaluated on a strict time-based split.
 
+**Live Streamlit demo:** [https://load-forecasting-yxxmlzdcxjrv6fhh82uvdo.streamlit.app/](https://load-forecasting-yxxmlzdcxjrv6fhh82uvdo.streamlit.app/)
+
 ## Results
 Test period: 1 Jan to 3 Aug 2018 (5,136 hours). All models forecast the next 24 hours from data known at midnight.
 
@@ -31,23 +33,34 @@ Test period: 1 Jan to 3 Aug 2018 (5,136 hours). All models forecast the next 24 
 
 ## Project structure
 ```
-notebooks/   01_eda, 02_statistical_analysis, 03_baselines_and_ml, 04_lstm, 05_model_comparison
-reports/     figures and result tables
+src/         modular pipeline (data, features, stats, baselines_ml, lstm_model, compare)
+app/         Streamlit dashboard (app/app.py)
+tests/       unit tests for cleaning, feature engineering and metrics
+notebooks/   exploratory notebooks (01_eda to 05_model_comparison)
+reports/     figures, result tables and demo predictions
 models/      saved models (not tracked)
 data/        raw and processed data (not tracked)
 ```
 
 ## Reproduce
-1. `pip install -r requirements.txt`
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 2. Download `PJME_hourly.csv` from the Kaggle dataset "Hourly Energy Consumption" and place it in `data/raw/`.
-3. Run notebooks 01 to 05 in order.
+3. Run the modular Python pipeline (or notebooks `01` to `05`):
+   ```bash
+   python -m src.data && python -m src.stats
+   python -m src.baselines_ml && python -m src.lstm_model && python -m src.compare
+   python -m pytest -q
+   ```
 
 Data: PJM Interconnection, via Kaggle.
-## Demo
 
-**Live Streamlit app:**  
-[https://load-forecasting-yxxmlzdcxjrv6fhh82uvdo.streamlit.app/](https://load-forecasting-yxxmlzdcxjrv6fhh82uvdo.streamlit.app/)
+## Demo
+**Live Streamlit app:** [https://load-forecasting-yxxmlzdcxjrv6fhh82uvdo.streamlit.app/](https://load-forecasting-yxxmlzdcxjrv6fhh82uvdo.streamlit.app/)
 
 To run locally:
 ```bash
 streamlit run app/app.py
+```

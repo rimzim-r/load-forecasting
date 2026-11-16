@@ -11,3 +11,4 @@ holidays
 jupyter
 ipykernel
 streamlit
+pytest
